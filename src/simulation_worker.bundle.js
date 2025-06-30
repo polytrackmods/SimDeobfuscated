@@ -6,11 +6,11 @@ importScripts(
     "../simlib/pako.min.js",
     "../simlib/three.min.js",
     "../simlib/OBB.min.js",
-    "../simlib/ammo.wasm.js",
+    "../simlib/ammo.wasm.js"
 );
 
 /**
- * 
+ *
  * @param {string} operation The name of the operation that requires a deterministic implementation.
  */
 function noDeterministicImplementationError(operation) {
@@ -236,8 +236,8 @@ Math = {
 };
 
 /**
- * 
- * @param {string} base64 
+ *
+ * @param {string} base64
  * @returns {Uint8Array|null} Returns a Uint8Array if the base64 string is valid, otherwise returns null.
  */
 function decodeBase64ToUint8Array(base64) {
@@ -271,7 +271,7 @@ class FrameRecorder {
     static maxFrames = 5999999;
 
     /**
-     * 
+     *
      * @typedef {Object} FrameEvents
      * @property {number[]} upFrames Array of frames where the state of `up` changes.
      * @property {number[]} downFrames Array of frames where the state of `down` changes.
@@ -281,7 +281,7 @@ class FrameRecorder {
      */
 
     /**
-     * 
+     *
      * @constructor
      * @param {FrameEvents|null} events Object containing arrays of frame events for different actions.
      */
@@ -302,7 +302,7 @@ class FrameRecorder {
     }
 
     /**
-     * 
+     *
      * Example:
      * ```javascript
      * let states = [1, 3, 5, 7];
@@ -310,7 +310,7 @@ class FrameRecorder {
      * let count = FrameRecorder.countInputFlips(states, frame);
      * console.log(count); // Output: 2 - as there are two state changes (1 and 3) before frame 4.
      * ```
-     * 
+     *
      * @param {number[]} states Array of frame numbers representing the state changes.
      * @param {number} frame The frame number to check against the states.
      * @returns {number} Returns the count of input flips up to the specified frame.
@@ -331,7 +331,7 @@ class FrameRecorder {
     }
 
     /**
-     * 
+     *
      * @typedef {Object} FrameState
      * @property {boolean} up Indicates if the 'up' action is active.
      * @property {boolean} down Indicates if the 'down' action is active.
@@ -341,7 +341,7 @@ class FrameRecorder {
      */
 
     /**
-     * 
+     *
      * @param {number} frame The frame number for which to get the state.
      * @returns {FrameState} Returns the state of the frame for the given frame number.
      */
@@ -352,15 +352,21 @@ class FrameRecorder {
 
         return {
             up: FrameRecorder.countInputFlips(this.upFrames, frame) % 2 === 1,
-            down: FrameRecorder.countInputFlips(this.downFrames, frame) % 2 === 1,
-            left: FrameRecorder.countInputFlips(this.leftFrames, frame) % 2 === 1,
-            right: FrameRecorder.countInputFlips(this.rightFrames, frame) % 2 === 1,
-            reset: FrameRecorder.countInputFlips(this.resetFrames, frame) % 2 === 1,
-        }
+            down:
+                FrameRecorder.countInputFlips(this.downFrames, frame) % 2 === 1,
+            left:
+                FrameRecorder.countInputFlips(this.leftFrames, frame) % 2 === 1,
+            right:
+                FrameRecorder.countInputFlips(this.rightFrames, frame) % 2 ===
+                1,
+            reset:
+                FrameRecorder.countInputFlips(this.resetFrames, frame) % 2 ===
+                1,
+        };
     }
 
     /**
-     * 
+     *
      * @param {Uint8Array} packetBuffer The packet (for one specific input) to decode.
      * @returns {number[]|null} Returns an array of frame numbers if the packet is valid, otherwise returns null.
      */
@@ -369,7 +375,8 @@ class FrameRecorder {
         if (packetBuffer.length < 3) return null;
 
         // Read the 3-byte little-endian integer
-        const frameCount = packetBuffer[0] | (packetBuffer[1] << 8) | (packetBuffer[2] << 16);
+        const frameCount =
+            packetBuffer[0] | (packetBuffer[1] << 8) | (packetBuffer[2] << 16);
 
         // Check if the packet is too short for the expected frame count
         if (packetBuffer.length < 3 + frameCount * 3) return null;
@@ -378,13 +385,15 @@ class FrameRecorder {
 
         for (let i = 0; i < frameCount; i++) {
             // Decode the 3-byte little-endian integer for each input state change frame
-            const delta = packetBuffer[3 + i * 3] | (packetBuffer[4 + i * 3] << 8) | (packetBuffer[5 + i * 3] << 16);
+            const delta =
+                packetBuffer[3 + i * 3] |
+                (packetBuffer[4 + i * 3] << 8) |
+                (packetBuffer[5 + i * 3] << 16);
 
             // The first value is absolute, subsequent values are the deltas (differences from the previous frame)
             if (i === 0) {
                 frameNumbers.push(delta);
-            }
-            else {
+            } else {
                 frameNumbers.push(frameNumbers[i - 1] + delta);
             }
         }
@@ -393,8 +402,8 @@ class FrameRecorder {
     }
 
     /**
-     * 
-     * @param {string} base64 
+     *
+     * @param {string} base64
      * @returns {FrameRecorder|null} Returns a FrameRecorder instance if the base64 string is valid, otherwise returns null.
      */
     static deserialize(base64) {
@@ -413,16 +422,24 @@ class FrameRecorder {
         const upFrames = FrameRecorder.decodePacket(decompressedBuffer);
         if (!upFrames) return null;
         offset += 3 + upFrames.length * 3;
-        const rightFrames = FrameRecorder.decodePacket(decompressedBuffer.subarray(offset));
+        const rightFrames = FrameRecorder.decodePacket(
+            decompressedBuffer.subarray(offset)
+        );
         if (!rightFrames) return null;
         offset += 3 + rightFrames.length * 3;
-        const downFrames = FrameRecorder.decodePacket(decompressedBuffer.subarray(offset));
+        const downFrames = FrameRecorder.decodePacket(
+            decompressedBuffer.subarray(offset)
+        );
         if (!downFrames) return null;
         offset += 3 + downFrames.length * 3;
-        const leftFrames = FrameRecorder.decodePacket(decompressedBuffer.subarray(offset));
+        const leftFrames = FrameRecorder.decodePacket(
+            decompressedBuffer.subarray(offset)
+        );
         if (!leftFrames) return null;
         offset += 3 + leftFrames.length * 3;
-        const resetFrames = FrameRecorder.decodePacket(decompressedBuffer.subarray(offset));
+        const resetFrames = FrameRecorder.decodePacket(
+            decompressedBuffer.subarray(offset)
+        );
         if (!resetFrames) return null;
 
         return new FrameRecorder({
