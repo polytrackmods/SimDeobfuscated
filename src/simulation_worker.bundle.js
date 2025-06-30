@@ -272,18 +272,8 @@ class FrameRecorder {
 
     /**
      *
-     * @typedef {Object} FrameEvents
-     * @property {number[]} upFrames Array of frames where the state of `up` changes.
-     * @property {number[]} downFrames Array of frames where the state of `down` changes.
-     * @property {number[]} leftFrames Array of frames where the state of `left` changes.
-     * @property {number[]} rightFrames Array of frames where the state of `right` changes.
-     * @property {number[]} resetFrames Array of frames where the state of `reset` changes.
-     */
-
-    /**
-     *
      * @constructor
-     * @param {FrameEvents|null} events Object containing arrays of frame events for different actions.
+     * @param {{upFrames: number[], downFrames: number[], leftFrames: number[], rightFrames: number[], resetFrames: number[]}|null} events Object containing arrays of frame events for different actions.
      */
     constructor(events) {
         this.upFrames = [];
@@ -332,18 +322,8 @@ class FrameRecorder {
 
     /**
      *
-     * @typedef {Object} FrameState
-     * @property {boolean} up Indicates if the 'up' action is active.
-     * @property {boolean} down Indicates if the 'down' action is active.
-     * @property {boolean} left Indicates if the 'left' action is active.
-     * @property {boolean} right Indicates if the 'right' action is active.
-     * @property {boolean} reset Indicates if the 'reset' action is active.
-     */
-
-    /**
-     *
      * @param {number} frame The frame number for which to get the state.
-     * @returns {FrameState} Returns the state of the frame for the given frame number.
+     * @returns {{up: boolean, down: boolean, left: boolean, right: boolean, reset: boolean}} Returns the state of the frame for the given frame number.
      */
 
     getFrame(frame) {
