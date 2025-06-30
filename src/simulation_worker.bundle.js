@@ -276,10 +276,30 @@ class FrameRecorder {
      * @param {{upFrames: number[], downFrames: number[], leftFrames: number[], rightFrames: number[], resetFrames: number[]}|null} events Object containing arrays of frame events for different actions.
      */
     constructor(events) {
+        /**
+         * @type {number[]}
+         * @description Array of frame numbers when the "up" action was toggled.
+         */
         this.upFrames = [];
+        /**
+         * @type {number[]}
+         * @description Array of frame numbers when the "down" action was toggled.
+         */
         this.downFrames = [];
+        /**
+         * @type {number[]}
+         * @description Array of frame numbers when the "left" action was toggled.
+         */
         this.leftFrames = [];
+        /**
+         * @type {number[]}
+         * @description Array of frame numbers when the "right" action was toggled.
+         */
         this.rightFrames = [];
+        /**
+         * @type {number[]}
+         * @description Array of frame numbers when the "reset" action was toggled.
+         */
         this.resetFrames = [];
 
         if (events) {
@@ -429,5 +449,75 @@ class FrameRecorder {
             leftFrames: leftFrames,
             resetFrames: resetFrames,
         });
+    }
+}
+
+/**
+ * Class to count frames in a simulation.
+ */
+class FrameCounter {
+    /**
+     *
+     * @param {number} frames The number of frames to initialize the counter with.
+     * @throws {Error} Throws an error if frames is not a safe integer.
+     * @constructor
+     */
+    constructor(frames) {
+        if (!Number.isSafeInteger(frames))
+            throw new Error("Frames is not a safe integer");
+        /**
+         * @type {number}
+         * @description The number of frames counted.
+         */
+        this.frames = frames;
+    }
+
+    /**
+     * @returns {number} Returns the number of frames counted.
+     */
+    get numberOfFrames() {
+        return this.frames;
+    }
+
+    /**
+     * Increments the frame counter by one.
+     */
+    increment() {
+        this.frames++;
+    }
+
+    /**
+     *
+     * @param {FrameCounter} other The other FrameCounter to compare with.
+     * @returns {boolean} Returns true if this FrameCounter has fewer frames than the other, otherwise false.
+     */
+    lessThan(other) {
+        return this.frames < other.frames;
+    }
+
+    /**
+     *
+     * @param {FrameCounter} other The other FrameCounter to compare with.
+     * @returns {boolean} Returns true if this FrameCounter has fewer or equal frames than the other, otherwise false.
+     */
+    lessOrEqual(other) {
+        return this.frames <= other.frames;
+    }
+
+    /**
+     *
+     * @param {FrameCounter} other The other FrameCounter to compare with.
+     * @returns {boolean} Returns true if this FrameCounter has the same number of frames as the other, otherwise false.
+     */
+    equals(other) {
+        return this.frames == other.frames;
+    }
+
+    /**
+     * Creates a new FrameCounter instance with the same number of frames.
+     * @returns {FrameCounter} Returns a new FrameCounter instance.
+     */
+    clone() {
+        return new FrameCounter(this.frames);
     }
 }
