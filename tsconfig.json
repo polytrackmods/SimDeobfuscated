@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "declaration": true,
+        "emitDeclarationOnly": true,
+        "outDir": "types",
+        "target": "ES2020",
+        "module": "none",
+        "lib": ["ES2020", "WebWorker"],
+        "skipLibCheck": true
+    },
+    "include": ["src/simulation_worker.bundle.js"]
+}

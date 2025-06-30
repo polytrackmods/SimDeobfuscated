@@ -277,28 +277,28 @@ class FrameRecorder {
      */
     constructor(events) {
         /**
+         * Array of frame numbers when the "up" action was toggled.
          * @type {number[]}
-         * @description Array of frame numbers when the "up" action was toggled.
          */
         this.upFrames = [];
         /**
+         * Array of frame numbers when the "down" action was toggled.
          * @type {number[]}
-         * @description Array of frame numbers when the "down" action was toggled.
          */
         this.downFrames = [];
         /**
+         * Array of frame numbers when the "left" action was toggled.
          * @type {number[]}
-         * @description Array of frame numbers when the "left" action was toggled.
          */
         this.leftFrames = [];
         /**
+         * Array of frame numbers when the "right" action was toggled.
          * @type {number[]}
-         * @description Array of frame numbers when the "right" action was toggled.
          */
         this.rightFrames = [];
         /**
+         * Array of frame numbers when the "reset" action was toggled.
          * @type {number[]}
-         * @description Array of frame numbers when the "reset" action was toggled.
          */
         this.resetFrames = [];
 
@@ -466,8 +466,8 @@ class FrameCounter {
         if (!Number.isSafeInteger(frames))
             throw new Error("Frames is not a safe integer");
         /**
+         * The number of frames counted.
          * @type {number}
-         * @description The number of frames counted.
          */
         this.frames = frames;
     }
@@ -521,3 +521,12 @@ class FrameCounter {
         return new FrameCounter(this.frames);
     }
 }
+
+/**
+ * Enum which represents the different stages of the race.
+ * @type {{ Checkpoint: 0, Finish: 1 }}
+ */
+const RaceStage = {
+    Checkpoint: 0,
+    Finish: 1,
+};
