@@ -1204,7 +1204,7 @@ class TrackManager {
      * It processes the parts provided by the part provider, categorizing them by type and
      * setting up the necessary physics for each part.
      * @param {InstanceType<typeof PhysicsEngine>} physicsEngine - The physics engine to use for the track parts.
-     * @param {undefined} trackData - The track data containing information about the parts and their detectors.
+     * @param {TrackData} trackData - The track data containing information about the parts and their detectors.
      * @param {undefined} partProvider - The part provider that supplies the parts for the track.
      * @throws {Error} Throws an error if a part detector is missing or if a checkpoint has no checkpoint order.
      * @constructor
@@ -1335,8 +1335,8 @@ class TrackManager {
      * @param {number} rotation The rotation index of the part.
      * @param {number} rotationAxis The rotation axis index of the part.
      * @param {number} type The type of the part.
-     * @param {number} physicsEngine The physics engine to use for the part.
-     * @param {number} trackData The track data containing information about the part's physics shape.
+     * @param {PhysicsEngine} physicsEngine The physics engine to use for the part.
+     * @param {TrackData} trackData The track data containing information about the part's physics shape.
      */
     static addPhysicsPart(
         x,
@@ -1600,32 +1600,193 @@ const BlockRotationAxises = {
 };
 
 /**
- * Version data for the simulation worker.
- * This object contains the version number and beta versions for different components.
- * @type {{version: string, betaVersions: {main: number, physics: number}}}
+ * Physics attributes for the car and its components.
+ * @type {{massOffset: number, detectorBoxCenter: InstanceType<typeof THREE.Vector3>, detectorBoxSize: InstanceType<typeof THREE.Vector3>, suspensionResetLengthFront: number, suspensionResetLengthRear: number}}
  */
-const versionData = {
-    version: "0.5.0",
-    betaVersions: {
-        main: 5,
-        physics: 4,
-    },
+const PhysicsAttributes = {
+    massOffset: 0.6,
+    detectorBoxCenter: new THREE.Vector3(0, 0.48, -0.15),
+    detectorBoxSize: new THREE.Vector3(0.89, 0.22, 1.8),
+    suspensionResetLengthFront: 0.07809501004219055,
+    suspensionResetLengthRear: 0.0781289680480957,
 };
 
-if (
-    !Number.isSafeInteger(versionData.betaVersions.main) ||
-    versionData.betaVersions.main < 1
-) {
-    throw new Error(
-        "package.json beta version property must be a positive integer"
-    );
-}
+/**
+ * Class to manage track data, including physics shapes and detectors.
+ */
+class TrackData {
+    /**
+     * Creates a new TrackData instance.
+     * @param {Array<{id: number, vertices: number[], detector?: {type: number, center: number[], size: number[]}, startOffset?: number[]}>} models - An array of track models with their vertices and optional detectors and start offsets.
+     * @throws {Error} Throws an error if the vertices length is not divisible by 9.
+     * @constructor
+     */
+    constructor(models) {
+        this.models = new Map();
 
-if (
-    !Number.isSafeInteger(versionData.betaVersions.physics) ||
-    versionData.betaVersions.physics < 1
-) {
-    throw new Error(
-        "package.json beta physicsVersion property must be a positive integer"
-    );
+        for (const { id, vertices, detector, startOffset } of models) {
+            const { boundingBox, shape, triangleMesh } =
+                TrackData.createPhysicsShape(vertices);
+
+            this.models.set(id, {
+                boundingBox,
+                shape,
+                triangleMesh,
+                detector: detector
+                    ? {
+                          type: detector.type,
+                          center: new THREE.Vector3(...detector.center),
+                          size: new THREE.Vector3(...detector.size),
+                      }
+                    : null,
+                startOffset: startOffset
+                    ? new THREE.Vector3(...startOffset)
+                    : null,
+            });
+        }
+    }
+
+    /**
+     * Disposes of the track data.
+     */
+    dispose() {
+        for (const { shape, triangleMesh } of this.models.values()) {
+            Ammo.destroy(shape);
+            Ammo.destroy(triangleMesh);
+        }
+
+        this.models.clear();
+    }
+
+    /**
+     * Returns the physics shape for a given track part id.
+     * @param {number} id - The id of the track part.
+     * @throws {Error} Throws an error if the track part with the given id does
+     * @returns {{boundingBox: InstanceType<typeof THREE.Box3>, shape: InstanceType<typeof Ammo.btCollisionShape>}}
+     */
+    getPhysicsShape(id) {
+        const model = this.models.get(id);
+        if (!model) {
+            throw new Error(
+                `Track part with the id "${id}" has no physics model`
+            );
+        }
+
+        return {
+            boundingBox: model.boundingBox.clone(),
+            shape: model.shape,
+        };
+    }
+
+    /**
+     * Returns an array of part types that have a detector of the specified type.
+     * @param {number} type - The type of the detector to filter by.
+     * @returns {Array<number>} An array of part types that have a detector of the
+     */
+    getPartTypesWithDetector(type) {
+        const result = [];
+        for (const [id, model] of this.models.entries()) {
+            if (model.detector && model.detector.type === type) {
+                result.push(id);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Returns an array of part types that are considered start parts.
+     * @returns {Array<number>} An array of part types that are considered start parts.
+     */
+    getStartPartTypes() {
+        const result = [];
+        for (const [id, model] of this.models.entries()) {
+            if (model.startOffset) {
+                result.push(id);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Returns the start offset for a given track part id.
+     * @param {number} id - The id of the track part.
+     * @throws {Error} Throws an error if the track part with the given id does not exist.
+     * @returns {InstanceType<typeof THREE.Vector3>|null} The start offset for the track part, or null if not defined.
+     */
+    getPartStartOffset(id) {
+        const model = this.models.get(id);
+        if (!model) {
+            throw new Error(`Track part with the id "${id}" does not exist`);
+        }
+
+        return model.startOffset?.clone() ?? null;
+    }
+
+    /**
+     * Returns the detector for a given track part id.
+     * @param {number} id - The id of the track part.
+     * @throws {Error} Throws an error if the track part with the given id does not exist.
+     * @returns {Object} The detector object containing type, center, and size.
+     */
+    getDetector(id) {
+        const model = this.models.get(id);
+        if (!model) {
+            throw new Error(`Track part with the id "${id}" does not exist`);
+        }
+
+        return model.detector;
+    }
+
+    /**
+     * Creates a physics shape from an array of vertices.
+     * The vertices should be in groups of 9, representing triangles in the format:
+     * [x1, y1, z1, x2, y2, z2, x3, y3, z3].
+     * The method constructs a triangle mesh and a bounding box from the vertices.
+     * @param {number[]} vertices - An array of vertices representing triangles.
+     * @returns {{boundingBox: InstanceType<typeof THREE.Box3>, shape: InstanceType<typeof Ammo.btBvhTriangleMeshShape>, triangleMesh: InstanceType<typeof Ammo.btTriangleMesh>}}
+     * @throws {Error} Throws an error if the vertices length is not divisible by 9.
+     */
+    static createPhysicsShape(vertices) {
+        if (vertices.length % 9 !== 0) {
+            throw new Error(
+                "Physics shape vertices length is not divisible by 9"
+            );
+        }
+
+        const boundingBox = new THREE.Box3();
+        const triangleMesh = new Ammo.btTriangleMesh();
+
+        for (let i = 0; i < vertices.length; i += 9) {
+            const [x1, y1, z1, x2, y2, z2, x3, y3, z3] = vertices.slice(
+                i,
+                i + 9
+            );
+
+            const point1 = new Ammo.btVector3(x1, y1, z1);
+            const point2 = new Ammo.btVector3(x2, y2, z2);
+            const point3 = new Ammo.btVector3(x3, y3, z3);
+
+            triangleMesh.addTriangle(point1, point2, point3);
+
+            Ammo.destroy(point1);
+            Ammo.destroy(point2);
+            Ammo.destroy(point3);
+
+            boundingBox.expandByPoint(new THREE.Vector3(x1, y1, z1));
+            boundingBox.expandByPoint(new THREE.Vector3(x2, y2, z2));
+            boundingBox.expandByPoint(new THREE.Vector3(x3, y3, z3));
+        }
+
+        // TODO: figure out if second parameter is true or false
+        const shape = new Ammo.btBvhTriangleMeshShape(triangleMesh, true);
+        shape.setMargin(0.01);
+
+        return {
+            boundingBox,
+            shape,
+            triangleMesh,
+        };
+    }
 }

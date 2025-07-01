@@ -446,8 +446,8 @@ declare class TrackManager {
      * @param {number} rotation The rotation index of the part.
      * @param {number} rotationAxis The rotation axis index of the part.
      * @param {number} type The type of the part.
-     * @param {number} physicsEngine The physics engine to use for the part.
-     * @param {number} trackData The track data containing information about the part's physics shape.
+     * @param {PhysicsEngine} physicsEngine The physics engine to use for the part.
+     * @param {TrackData} trackData The track data containing information about the part's physics shape.
      */
     static addPhysicsPart(
         x: number,
@@ -456,8 +456,8 @@ declare class TrackManager {
         rotation: number,
         rotationAxis: number,
         type: number,
-        physicsEngine: number,
-        trackData: number
+        physicsEngine: PhysicsEngine,
+        trackData: TrackData
     ): void;
     /**
      * Creates a new TrackManager instance.
@@ -465,17 +465,17 @@ declare class TrackManager {
      * It processes the parts provided by the part provider, categorizing them by type and
      * setting up the necessary physics for each part.
      * @param {InstanceType<typeof PhysicsEngine>} physicsEngine - The physics engine to use for the track parts.
-     * @param {undefined} trackData - The track data containing information about the parts and their detectors.
+     * @param {TrackData} trackData - The track data containing information about the parts and their detectors.
      * @param {undefined} partProvider - The part provider that supplies the parts for the track.
      * @throws {Error} Throws an error if a part detector is missing or if a checkpoint has no checkpoint order.
      * @constructor
      */
     constructor(
         physicsEngine: InstanceType<typeof PhysicsEngine>,
-        trackData: undefined,
+        trackData: TrackData,
         partProvider: undefined
     );
-    trackData: any;
+    trackData: TrackData;
     partsByType: Map<any, any>;
     finishParts: any[];
     checkpointParts: any[];
@@ -706,14 +706,90 @@ declare const BlockRotationAxises: {
     ZNegative: 5;
 };
 /**
- * Version data for the simulation worker.
- * This object contains the version number and beta versions for different components.
- * @type {{version: string, betaVersions: {main: number, physics: number}}}
+ * Physics attributes for the car and its components.
+ * @type {{massOffset: number, detectorBoxCenter: InstanceType<typeof THREE.Vector3>, detectorBoxSize: InstanceType<typeof THREE.Vector3>, suspensionResetLengthFront: number, suspensionResetLengthRear: number}}
  */
-declare const versionData: {
-    version: string;
-    betaVersions: {
-        main: number;
-        physics: number;
-    };
+declare const PhysicsAttributes: {
+    massOffset: number;
+    detectorBoxCenter: InstanceType<typeof THREE.Vector3>;
+    detectorBoxSize: InstanceType<typeof THREE.Vector3>;
+    suspensionResetLengthFront: number;
+    suspensionResetLengthRear: number;
 };
+/**
+ * Class to manage track data, including physics shapes and detectors.
+ */
+declare class TrackData {
+    /**
+     * Creates a physics shape from an array of vertices.
+     * The vertices should be in groups of 9, representing triangles in the format:
+     * [x1, y1, z1, x2, y2, z2, x3, y3, z3].
+     * The method constructs a triangle mesh and a bounding box from the vertices.
+     * @param {number[]} vertices - An array of vertices representing triangles.
+     * @returns {{boundingBox: InstanceType<typeof THREE.Box3>, shape: InstanceType<typeof Ammo.btBvhTriangleMeshShape>, triangleMesh: InstanceType<typeof Ammo.btTriangleMesh>}}
+     * @throws {Error} Throws an error if the vertices length is not divisible by 9.
+     */
+    static createPhysicsShape(vertices: number[]): {
+        boundingBox: InstanceType<typeof THREE.Box3>;
+        shape: InstanceType<typeof Ammo.btBvhTriangleMeshShape>;
+        triangleMesh: InstanceType<typeof Ammo.btTriangleMesh>;
+    };
+    /**
+     * Creates a new TrackData instance.
+     * @param {Array<{id: number, vertices: number[], detector?: {type: number, center: number[], size: number[]}, startOffset?: number[]}>} models - An array of track models with their vertices and optional detectors and start offsets.
+     * @throws {Error} Throws an error if the vertices length is not divisible by 9.
+     * @constructor
+     */
+    constructor(
+        models: Array<{
+            id: number;
+            vertices: number[];
+            detector?: {
+                type: number;
+                center: number[];
+                size: number[];
+            };
+            startOffset?: number[];
+        }>
+    );
+    models: Map<any, any>;
+    /**
+     * Disposes of the track data.
+     */
+    dispose(): void;
+    /**
+     * Returns the physics shape for a given track part id.
+     * @param {number} id - The id of the track part.
+     * @throws {Error} Throws an error if the track part with the given id does
+     * @returns {{boundingBox: InstanceType<typeof THREE.Box3>, shape: InstanceType<typeof Ammo.btCollisionShape>}}
+     */
+    getPhysicsShape(id: number): {
+        boundingBox: InstanceType<typeof THREE.Box3>;
+        shape: InstanceType<typeof Ammo.btCollisionShape>;
+    };
+    /**
+     * Returns an array of part types that have a detector of the specified type.
+     * @param {number} type - The type of the detector to filter by.
+     * @returns {Array<number>} An array of part types that have a detector of the
+     */
+    getPartTypesWithDetector(type: number): Array<number>;
+    /**
+     * Returns an array of part types that are considered start parts.
+     * @returns {Array<number>} An array of part types that are considered start parts.
+     */
+    getStartPartTypes(): Array<number>;
+    /**
+     * Returns the start offset for a given track part id.
+     * @param {number} id - The id of the track part.
+     * @throws {Error} Throws an error if the track part with the given id does not exist.
+     * @returns {InstanceType<typeof THREE.Vector3>|null} The start offset for the track part, or null if not defined.
+     */
+    getPartStartOffset(id: number): InstanceType<typeof THREE.Vector3> | null;
+    /**
+     * Returns the detector for a given track part id.
+     * @param {number} id - The id of the track part.
+     * @throws {Error} Throws an error if the track part with the given id does not exist.
+     * @returns {Object} The detector object containing type, center, and size.
+     */
+    getDetector(id: number): any;
+}
