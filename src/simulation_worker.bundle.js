@@ -1132,7 +1132,6 @@ const RaceStage = {
     Finish: 1,
 };
 
-// TODO: determine the face normals & rotations for each row/column
 /**
  * Array of pre-calculated quaternions for block rotations.
  * Each row represents a face normal to rotate around.
@@ -1423,4 +1422,210 @@ class TrackManager {
 
         return null;
     }
+}
+
+// Don't add a type to the jsdoc, ts automatically infers the type from the object
+/**
+ * Enum representing the different types of blocks in the track.
+ */
+const BlockTypes = {
+    Straight: 0,
+    TurnSharp: 1,
+    SlopeUp: 2,
+    SlopeDown: 3,
+    Slope: 4,
+    Start: 5,
+    Finish: 6,
+    ToWideMiddle: 7,
+    ToWideLeft: 8,
+    ToWideRight: 9,
+    StraightWide: 10,
+    InnerCornerWide: 11,
+    OuterCornerWide: 12,
+    SlopeUpLeftWide: 13,
+    SlopeUpRightWide: 14,
+    SlopeDownLeftWide: 15,
+    SlopeDownRightWide: 16,
+    SlopeLeftWide: 17,
+    SlopeRightWide: 18,
+    PillarTop: 19,
+    PillarMiddle: 20,
+    PillarBottom: 21,
+    PillarShort: 22,
+    PlanePillarBottom: 23,
+    PlanePillarShort: 24,
+    Plane: 25,
+    PlaneWall: 26,
+    PlaneWallCorner: 27,
+    PlaneWallInnerCorner: 28,
+    Block: 29,
+    WallTrackTop: 30,
+    WallTrackMiddle: 31,
+    WallTrackBottom: 32,
+    PlaneSlopeUp: 33,
+    PlaneSlopeDown: 34,
+    PlaneSlope: 35,
+    TurnShort: 36,
+    TurnLong: 37,
+    SlopeUpLong: 38,
+    SlopeDownLong: 39,
+    SlopePillar: 40,
+    TurnSLeft: 41,
+    TurnSRight: 42,
+    IntersectionT: 43,
+    IntersectionCross: 44,
+    PillarBranch1: 45,
+    PillarBranch2: 46,
+    PillarBranch3: 47,
+    PillarBranch4: 48,
+    WallTrackBottomCorner: 49,
+    WallTrackMiddleCorner: 50,
+    WallTrackTopCorner: 51,
+    Checkpoint: 52,
+    HalfBlock: 53,
+    QuarterBlock: 54,
+    HalfPlane: 55,
+    QuarterPlane: 56,
+    PlaneBridge: 57,
+    SignArrowLeft: 58,
+    SignArrowRight: 59,
+    SignArrowUp: 61,
+    SignArrowDown: 62,
+    SignWarning: 63,
+    SignWrongWay: 64,
+    CheckpointWide: 65,
+    WallTrackCeiling: 66,
+    WallTrackFloor: 67,
+    BlockSlopedDown: 68,
+    BlockSlopedDownInnerCorner: 69,
+    BlockSlopedDownOuterCorner: 70,
+    BlockSlopedUp: 71,
+    BlockSlopedUpInnerCorner: 72,
+    BlockSlopedUpOuterCorner: 73,
+    FinishWide: 74,
+    PlaneCheckpoint: 75,
+    PlaneFinish: 76,
+    PlaneCheckpointWide: 77,
+    PlaneFinishWide: 78,
+    WallTrackBottomInnerCorner: 79,
+    WallTrackInnerCorner: 80,
+    WallTrackTopInnerCorner: 81,
+    TurnLong2: 82,
+    TurnLong3: 83,
+    SlopePillarShort: 84,
+    BlockSlopeUp: 85,
+    BlockSlopeDown: 86,
+    BlockSlopeVerticalTop: 87,
+    BlockSlopeVerticalBottom: 88,
+    PlaneSlopeVerticalBottom: 90,
+    StartWide: 91,
+    PlaneStart: 92,
+    PlaneStartWide: 93,
+    TurnShortLeftWide: 94,
+    TurnShortRightWide: 95,
+    TurnLongLeftWide: 96,
+    TurnLongRightWide: 97,
+    SlopeUpVertical: 98,
+    PlaneSlopePillar: 99,
+    PlaneSlopePillarShort: 100,
+    PillarBranch1Top: 101,
+    PillarBranch1Bottom: 102,
+    PillarBranch1Middle: 103,
+    PillarBranch2Top: 104,
+    PillarBranch2Middle: 105,
+    PillarBranch2Bottom: 106,
+    PillarBranch3Top: 107,
+    PillarBranch3Middle: 108,
+    PillarBranch3Bottom: 109,
+    PillarBranch4Top: 110,
+    PillarBranch4Middle: 111,
+    PillarBranch4Bottom: 112,
+    PillarBranch5: 113,
+    PillarBranch5Top: 114,
+    PillarBranch5Middle: 115,
+    PillarBranch5Bottom: 116,
+    ToWideDouble: 117,
+    ToWideDiagonal: 118,
+    StraightPillarBottom: 119,
+    StraightPillarShort: 120,
+    TurnSharpPillarBottom: 121,
+    TurnSharpPillarShort: 122,
+    IntersectionTPillarBottom: 123,
+    IntersectionTPillarShort: 124,
+    IntersectionCrossPillarBottom: 125,
+    IntersectionCrossPillarShort: 126,
+    PlaneBridgeCorner: 127,
+    PlaneBridgeIntersectionT: 128,
+    PlaneBridgeIntersectionCross: 129,
+    BlockBridge: 130,
+    BlockBridgeCorner: 131,
+    BlockBridgeIntersectionT: 132,
+    BlockBridgeIntersectionCross: 133,
+    WallTrackCeilingCorner: 134,
+    WallTrackCeilingPlaneCorner: 135,
+    WallTrackFloorCorner: 136,
+    WallTrackFloorPlaneCorner: 137,
+    SlopeUpVerticalLeftWide: 138,
+    SlopeUpVerticalRightWide: 139,
+    BlockSlopeVerticalCornerTop: 140,
+    BlockSlopeVerticalCornerBottom: 141,
+    WallTrackSlopeToVertical: 142,
+    PlaneSlopeToVertical: 143,
+    BlockSlopeToVertical: 144,
+    PlaneSlopeUpLong: 145,
+    PlaneSlopeDownLong: 146,
+    SlopeUpLongLeftWide: 147,
+    SlopeUpLongRightWide: 148,
+    SlopeDownLongLeftWide: 149,
+    SlopeDownLongRightWide: 150,
+    BlockSlopeUpLong: 151,
+    BlockSlopeDownLong: 152,
+    BlockSlopeVerticalInnerCornerBottom: 153,
+    BlockSlopeVerticalInnerCornerTop: 154,
+    BlockInnerCorner: 155,
+};
+
+/**
+ * Enum representing the different rotation axises for blocks.
+ * Each axis corresponds to a specific rotation direction.
+ * @type {{YPositive: 0, YNegative: 1, XPositive: 2, XNegative: 3, ZPositive: 4, ZNegative: 5}}
+ */
+const BlockRotationAxises = {
+    YPositive: 0,
+    YNegative: 1,
+    XPositive: 2,
+    XNegative: 3,
+    ZPositive: 4,
+    ZNegative: 5,
+};
+
+/**
+ * Version data for the simulation worker.
+ * This object contains the version number and beta versions for different components.
+ * @type {{version: string, betaVersions: {main: number, physics: number}}}
+ */
+const versionData = {
+    version: "0.5.0",
+    betaVersions: {
+        main: 5,
+        physics: 4,
+    },
+};
+
+if (
+    !Number.isSafeInteger(versionData.betaVersions.main) ||
+    versionData.betaVersions.main < 1
+) {
+    throw new Error(
+        "package.json beta version property must be a positive integer"
+    );
+}
+
+if (
+    !Number.isSafeInteger(versionData.betaVersions.physics) ||
+    versionData.betaVersions.physics < 1
+) {
+    throw new Error(
+        "package.json beta physicsVersion property must be a positive integer"
+    );
 }
