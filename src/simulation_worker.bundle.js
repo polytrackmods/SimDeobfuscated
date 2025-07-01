@@ -12,6 +12,7 @@ importScripts(
 /**
  *
  * @param {string} operation The name of the operation that requires a deterministic implementation.
+ * @throws {Error} Throws an error indicating that the operation does not have a deterministic implementation.
  */
 function noDeterministicImplementationError(operation) {
     throw new Error(operation + ": No deterministic implementation");
@@ -268,6 +269,10 @@ function decodeBase64ToUint8Array(base64) {
  * Class to record and decode frame events.
  */
 class FrameRecorder {
+    /**
+     * Maximum number of frames that can be recorded.
+     * @type {number}
+     */
     static maxFrames = 5999999;
 
     /**
@@ -449,6 +454,599 @@ class FrameRecorder {
             leftFrames: leftFrames,
             resetFrames: resetFrames,
         });
+    }
+}
+
+/**
+ * Class representing a physics engine using Ammo.js.
+ */
+class PhysicsEngine {
+    /**
+     * The maximum physics steps per second.
+     * @type {number}
+     */
+    static stepsPerSecond = 1000;
+    /**
+     * The size of the spatial grid used for collision detection.
+     * This value determines how finely the world is divided into spatial cells for efficient collision detection.
+     * A smaller value results in more cells, which can improve collision detection accuracy but may increase
+     * computational overhead.
+     * @type {number}
+     */
+    static spatialGridSize = 20;
+
+    /**
+     *
+     * @constructor
+     */
+    constructor() {
+        /**
+         * The collision configuration for the physics engine.
+         * @type {InstanceType<typeof Ammo.btDefaultCollisionConfiguration>}
+         */
+        this.collisionConfiguration =
+            new Ammo.btDefaultCollisionConfiguration();
+        /**
+         * The collision dispatcher for the physics engine.
+         * @type {InstanceType<typeof Ammo.btCollisionDispatcher>}
+         */
+        this.collisionDispatcher = new Ammo.btCollisionDispatcher(
+            this.collisionConfiguration
+        );
+        /**
+         * The broadphase for the physics engine, which is used for collision detection.
+         * @type {InstanceType<typeof Ammo.btDbvtBroadphase>}
+         */
+        this.broadphase = new Ammo.btDbvtBroadphase();
+        /**
+         * The constraint solver for the physics engine, which is used to resolve constraints between bodies.
+         * @type {InstanceType<typeof Ammo.btSequentialImpulseConstraintSolver>}
+         */
+        this.constraintSolver = new Ammo.btSequentialImpulseConstraintSolver();
+        /**
+         * The dynamics world for the physics engine, which is the main simulation world.
+         * @type {InstanceType<typeof Ammo.btDiscreteDynamicsWorld>}
+         */
+        this.dynamicsWorld = new Ammo.btDiscreteDynamicsWorld(
+            this.collisionDispatcher,
+            this.broadphase,
+            this.constraintSolver,
+            this.collisionConfiguration
+        );
+
+        // Set the gravity for the dynamics world.
+        const gravityVector = new Ammo.btVector3(0, -9.82, 0);
+        this.dynamicsWorld.setGravity(gravityVector);
+        Ammo.destroy(gravityVector);
+
+        /**
+         *
+         * @typedef {Object} StaticBodyData
+         * @property {boolean} active - Whether the body is currently active in physics simulation
+         * @property {InstanceType<typeof THREE.Matrix4>} matrix - Transform matrix for the body
+         * @property {InstanceType<typeof Ammo.btCollisionShape>} shape - Bullet physics collision shape
+         * @property {InstanceType<typeof Ammo.btRigidBody>|null} body - Bullet physics rigid body (null when inactive)
+         * @property {InstanceType<typeof THREE.Vector3>} min - Minimum bounds of the body's AABB
+         * @property {InstanceType<typeof THREE.Vector3>} max - Maximum bounds of the body's AABB
+         */
+
+        /**
+         * Array of static bodies in the physics world.
+         * @type {StaticBodyData[]}
+         */
+        this.staticBodies = [];
+        /**
+         * Map to store spatial hash data for collision detection.
+         * @type {Map<number, Map<number, Map<number, StaticBodyData[]>>>}
+         */
+        this.spatialHashMap = new Map();
+        /**
+         * Array of active bodies in the physics world.
+         * @type {StaticBodyData[]}
+         */
+        this.activeBodies = [];
+        /**
+         * Map to pool static body data for reuse.
+         * This is used to avoid creating new objects for every static body, improving performance.
+         * @type {Map<InstanceType<typeof Ammo.btCollisionShape>, InstanceType<typeof Ammo.btRigidBody>[]>}
+         */
+        this.bodyPool = new Map();
+        /**
+         * The ground plane in the physics world, used for collision detection.
+         * @type {{body: InstanceType<typeof Ammo.btRigidBody>, shape: InstanceType<typeof Ammo.btStaticPlaneShape>, isActive: boolean}|null}
+         */
+        this.groundPlane = null;
+        /**
+         * The mountain terrain in the physics world, used for collision detection.
+         * @type {{body: InstanceType<typeof Ammo.btRigidBody>, shape: InstanceType<typeof Ammo.btBvhTriangleMeshShape>, triangleMesh: InstanceType<typeof Ammo.btTriangleMesh>, offset: InstanceType<typeof THREE.Vector3>, minimumRadius: number, isActive: boolean}|null}
+         */
+        this.mountainTerrain = null;
+    }
+
+    /**
+     * Disposes of the physics engine, cleaning up all resources and removing bodies from the dynamics world.
+     * This method should be called when the physics engine is no longer needed to prevent memory leaks
+     * and ensure that all resources are properly released.
+     */
+    dispose() {
+        // Remove all active rigid bodies from the dynamics world.
+        for (const { body: rigidBody } of this.activeBodies) {
+            if (rigidBody) this.dynamicsWorld.removeRigidBody(rigidBody);
+        }
+        this.activeBodies = [];
+
+        // Destory all static bodies and their motion states.
+        for (const { body: rigidBody } of this.staticBodies) {
+            if (rigidBody) {
+                Ammo.destroy(rigidBody.getMotionState());
+                Ammo.destroy(rigidBody);
+            }
+        }
+        this.staticBodies = [];
+        this.spatialHashMap.clear();
+
+        // Destory all pooled bodies.
+        for (const pooledBodies of this.bodyPool.values()) {
+            for (const pooledBody of pooledBodies) {
+                Ammo.destroy(pooledBody.getMotionState());
+                Ammo.destroy(pooledBody);
+            }
+        }
+        this.bodyPool.clear();
+
+        // Clean up ground plane
+        if (this.groundPlane) {
+            if (this.groundPlane.isActive)
+                this.dynamicsWorld.removeRigidBody(this.groundPlane.body);
+            Ammo.destroy(this.groundPlane.body.getMotionState());
+            Ammo.destroy(this.groundPlane.body);
+            Ammo.destroy(this.groundPlane.shape);
+        }
+
+        // Clean up mountain terrain
+        if (this.mountainTerrain) {
+            if (this.mountainTerrain.isActive)
+                this.dynamicsWorld.removeRigidBody(this.mountainTerrain.body);
+            Ammo.destroy(this.mountainTerrain.body.getMotionState());
+            Ammo.destroy(this.mountainTerrain.body);
+            Ammo.destroy(this.mountainTerrain.shape);
+            Ammo.destroy(this.mountainTerrain.triangleMesh);
+        }
+
+        // Destroy physics world components
+        Ammo.destroy(this.dynamicsWorld);
+        Ammo.destroy(this.constraintSolver);
+        Ammo.destroy(this.broadphase);
+        Ammo.destroy(this.collisionDispatcher);
+        Ammo.destroy(this.collisionConfiguration);
+    }
+
+    /**
+     * Creates a ground plane for the physics world.
+     * This method initializes a static plane shape that acts as the ground in the physics simulation.
+     * The ground plane is created at the origin with a normal pointing up along the Y-axis
+     * and a margin of 0.01 units.
+     * This ground plane is used to provide a surface for objects to collide with,
+     * preventing them from falling indefinitely.
+     * @throws {Error} If the ground plane is already initialized.
+     */
+    createGroundPlane() {
+        if (this.groundPlane) throw new Error("Ground is already intialized");
+
+        // Create plane normal pointing up (Y-axis)
+        const planeNormal = new Ammo.btVector3(0, 1, 0);
+        const planeShape = new Ammo.btStaticPlaneShape(planeNormal, 0);
+        planeShape.setMargin(0.01);
+        Ammo.destroy(planeNormal);
+
+        // Set up transform at origin
+        const transform = new Ammo.btTransform();
+        transform.setIdentity();
+        const motionState = new Ammo.btDefaultMotionState(transform);
+        Ammo.destroy(transform);
+
+        // Calculate inertia (0 for static body)
+        const localInertia = new Ammo.btVector3();
+        planeShape.calculateLocalInertia(0, localInertia);
+
+        // Create rigid body
+        const rigidBodyInfo = new Ammo.btRigidBodyConstructionInfo(
+            0,
+            motionState,
+            planeShape,
+            localInertia
+        );
+        const rigidBody = new Ammo.btRigidBody(rigidBodyInfo);
+        rigidBody.setFriction(1);
+
+        Ammo.destroy(localInertia);
+        Ammo.destroy(rigidBodyInfo);
+
+        this.groundPlane = {
+            body: rigidBody,
+            shape: planeShape,
+            isActive: false, // Initially inactive
+        };
+    }
+
+    /**
+     * Creates a mountain terrain from a given set of vertex data.
+     * This method initializes a triangle mesh shape for the mountains, allowing for complex terrain collision detection
+     * using a set of vertices defined in a flat array.
+     * The vertices should be provided in groups of 9, representing three vertices of a triangle
+     * (each vertex consisting of 3 components: x, y, z).
+     * The method also calculates the minimum distance from the origin to optimize collision detection.
+     * @param {number[]} verticies - An array of vertex data in groups of 9 (3 vertices * 3 components each).
+     * @param {InstanceType<typeof THREE.Vector3>} offset - The offset to apply to the mountain terrain's position in the physics world.
+     * @throws {Error} If the number of vertices is not divisible by 9 or if mountains are already initialized.
+     */
+    createMountains(verticies, offset) {
+        if (verticies.length % 9 !== 0)
+            throw new Error(
+                "Number of mountain verticies is not divisible by 9"
+            );
+
+        if (verticies.length > 0) {
+            if (this.mountainTerrain)
+                throw new Error("Mountains are already initialized");
+
+            let minimumDistanceSquared = Infinity;
+            const triangleMesh = new Ammo.btTriangleMesh();
+
+            // Process verticies in groups of 9 (3 verticies * 3 components each)
+            for (let i = 0; i < verticies.length; i += 9) {
+                const v1 = new Ammo.btVector3(
+                    verticies[i],
+                    verticies[i + 1],
+                    verticies[i + 2]
+                );
+                const v2 = new Ammo.btVector3(
+                    verticies[i + 3],
+                    verticies[i + 4],
+                    verticies[i + 5]
+                );
+                const v3 = new Ammo.btVector3(
+                    verticies[i + 6],
+                    verticies[i + 7],
+                    verticies[i + 8]
+                );
+
+                triangleMesh.addTriangle(v1, v2, v3);
+
+                // Clean up vertex vectors
+                Ammo.destroy(v1);
+                Ammo.destroy(v2);
+                Ammo.destroy(v3);
+
+                // Track minimum distance from origin for optimization
+                minimumDistanceSquared = Math.min(
+                    minimumDistanceSquared,
+                    new THREE.Vector3(
+                        verticies[i],
+                        verticies[i + 1],
+                        verticies[i + 2]
+                    ).lengthSq(),
+                    new THREE.Vector3(
+                        verticies[i + 3],
+                        verticies[i + 4],
+                        verticies[i + 5]
+                    ).lengthSq(),
+                    new THREE.Vector3(
+                        verticies[i + 6],
+                        verticies[i + 7],
+                        verticies[i + 8]
+                    ).lengthSq()
+                );
+            }
+
+            // Create BVH triangle mesh shape for efficient collision detection
+            // @ts-ignore
+            const meshShape = new Ammo.btBvhTriangleMeshShape(triangleMesh);
+            meshShape.setMargin(0.02);
+
+            // Set up transform with offset
+            const offsetVector = new Ammo.btVector3(
+                offset.x,
+                offset.y,
+                offset.z
+            );
+            const transform = new Ammo.btTransform();
+            transform.setIdentity();
+            transform.setOrigin(offsetVector);
+            Ammo.destroy(offsetVector);
+
+            // Calculate inertia (0 for static body)
+            const localInertia = new Ammo.btVector3();
+            meshShape.calculateLocalInertia(0, localInertia);
+
+            const motionState = new Ammo.btDefaultMotionState(transform);
+            Ammo.destroy(transform);
+
+            // Create rigid body
+            const rigidBodyInfo = new Ammo.btRigidBodyConstructionInfo(
+                0,
+                motionState,
+                meshShape,
+                localInertia
+            );
+            const rigidBody = new Ammo.btRigidBody(rigidBodyInfo);
+            rigidBody.setFriction(1);
+
+            Ammo.destroy(localInertia);
+            Ammo.destroy(rigidBodyInfo);
+
+            const minimumRadius = Math.sqrt(minimumDistanceSquared);
+
+            this.mountainTerrain = {
+                body: rigidBody,
+                shape: meshShape,
+                triangleMesh,
+                offset,
+                minimumRadius,
+                isActive: false,
+            };
+        }
+    }
+
+    /**
+     * Adds a static body to the physics world.
+     * This method creates a static body with a specified transform matrix, bounding box, and collision
+     * shape, and adds it to the spatial hash map for efficient collision detection.
+     * The static body is not active by default and will not be simulated until activated.
+     * The bounding box is transformed to world space using the provided transform matrix.
+     * The spatial hash map is used to efficiently manage static bodies in the physics world,
+     * allowing for quick lookups based on spatial coordinates.
+     * @param {InstanceType<typeof THREE.Matrix4>} transformMatrix - The transformation matrix for the static body.
+     * @param {InstanceType<typeof THREE.Box3>} boundingBox - The bounding box of the static body in local space.
+     * @param {InstanceType<typeof Ammo.btCollisionShape>} collisionShape - The collision shape for the static body.
+     */
+    addStaticBody(transformMatrix, boundingBox, collisionShape) {
+        // Transform bounding box to world space
+        const worldBoundingBox = boundingBox.clone();
+        worldBoundingBox.applyMatrix4(transformMatrix);
+
+        const staticBodyData = {
+            active: false,
+            matrix: transformMatrix,
+            shape: collisionShape,
+            body: null,
+            min: worldBoundingBox.min.clone(),
+            max: worldBoundingBox.max.clone(),
+        };
+
+        // Add to spatial hash map with 3-unit buffer
+        const minGridX = Math.floor(
+            (worldBoundingBox.min.x - 3) / PhysicsEngine.spatialGridSize
+        );
+        const maxGridX = Math.ceil(
+            (worldBoundingBox.max.x + 3) / PhysicsEngine.spatialGridSize
+        );
+        const minGridY = Math.floor(
+            (worldBoundingBox.min.y - 3) / PhysicsEngine.spatialGridSize
+        );
+        const maxGridY = Math.ceil(
+            (worldBoundingBox.max.y + 3) / PhysicsEngine.spatialGridSize
+        );
+        const minGridZ = Math.floor(
+            (worldBoundingBox.min.z - 3) / PhysicsEngine.spatialGridSize
+        );
+        const maxGridZ = Math.ceil(
+            (worldBoundingBox.max.z + 3) / PhysicsEngine.spatialGridSize
+        );
+
+        for (let x = minGridX; x <= maxGridX; x++) {
+            for (let y = minGridY; y <= maxGridY; y++) {
+                for (let z = minGridZ; z <= maxGridZ; z++) {
+                    const xMap = this.spatialHashMap.get(x);
+                    if (!xMap) {
+                        // 💀💀💀
+                        this.spatialHashMap.set(
+                            x,
+                            new Map([[y, new Map([[z, [staticBodyData]]])]])
+                        );
+                    } else {
+                        const yMap = xMap.get(y);
+                        if (!yMap) {
+                            xMap.set(y, new Map([[z, [staticBodyData]]]));
+                        } else {
+                            const zArray = yMap.get(z);
+                            if (!zArray) {
+                                yMap.set(z, [staticBodyData]);
+                            } else {
+                                zArray.push(staticBodyData);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Activates/deactivates physics for bodies based on player position.
+     * @param {InstanceType<typeof THREE.Vector3>} playerPosition - The position of the player in the physics world.
+     * @throws {Error} If the rigid body is already active when trying to activate it.
+     */
+    activePhysicsAt(playerPosition) {
+        // Handle ground plane activation based on player height
+        if (this.groundPlane) {
+            if (playerPosition.y < 4) {
+                if (!this.groundPlane.isActive) {
+                    this.dynamicsWorld.addRigidBody(this.groundPlane.body);
+                    this.groundPlane.isActive = true;
+                }
+            } else if (playerPosition.y > 5) {
+                if (this.groundPlane.isActive) {
+                    this.dynamicsWorld.removeRigidBody(this.groundPlane.body);
+                    this.groundPlane.isActive = false;
+                }
+            }
+        }
+
+        // Handle mountain terrain activation based on player distance
+        if (this.mountainTerrain) {
+            const distanceToMountains = playerPosition.distanceTo(
+                this.mountainTerrain.offset
+            );
+
+            if (distanceToMountains > this.mountainTerrain.minimumRadius - 10) {
+                if (!this.mountainTerrain.isActive) {
+                    this.dynamicsWorld.addRigidBody(this.mountainTerrain.body);
+                    this.mountainTerrain.isActive = true;
+                }
+            } else if (
+                distanceToMountains <
+                this.mountainTerrain.minimumRadius - 20
+            ) {
+                if (this.mountainTerrain.isActive) {
+                    this.dynamicsWorld.removeRigidBody(
+                        this.mountainTerrain.body
+                    );
+                    this.mountainTerrain.isActive = false;
+                }
+            }
+        }
+
+        // Deactivate bodies that are too far from player (with 3-unit buffer)
+        this.activeBodies = this.activeBodies.filter((bodyData) => {
+            if (
+                bodyData.active &&
+                (playerPosition.x < bodyData.min.x - 3 ||
+                    playerPosition.x > bodyData.max.x + 3 ||
+                    playerPosition.y < bodyData.min.y - 3 ||
+                    playerPosition.y > bodyData.max.y + 3 ||
+                    playerPosition.z < bodyData.min.z - 3 ||
+                    playerPosition.z > bodyData.max.z + 3)
+            ) {
+                // Return body to pool for reuse
+                const pool = this.bodyPool.get(bodyData.shape);
+                if (!pool) {
+                    this.bodyPool.set(bodyData.shape, [bodyData.body]);
+                } else {
+                    pool.push(bodyData.body);
+                }
+
+                // Remove from dynamics world
+                this.dynamicsWorld.removeRigidBody(bodyData.body);
+                bodyData.body = null;
+                bodyData.active = false;
+
+                return false; // Deactivate this body
+            }
+            return true; // Keep the body active
+        });
+
+        // Calculate grid position for spatial hash lookup
+        const gridPosition = playerPosition
+            .clone()
+            .divideScalar(PhysicsEngine.spatialGridSize)
+            .floor();
+
+        // Look up bodies in current grid cell
+        const xMap = this.spatialHashMap.get(gridPosition.x);
+        if (xMap) {
+            const yMap = xMap.get(gridPosition.y);
+            if (yMap) {
+                const zArray = yMap.get(gridPosition.z);
+                if (zArray) {
+                    for (const bodyData of zArray) {
+                        if (
+                            !bodyData.active &&
+                            playerPosition.x >= bodyData.min.x - 3 &&
+                            playerPosition.x <= bodyData.max.x + 3 &&
+                            playerPosition.y >= bodyData.min.y - 3 &&
+                            playerPosition.y <= bodyData.max.y + 3 &&
+                            playerPosition.z >= bodyData.min.z - 3 &&
+                            playerPosition.z <= bodyData.max.z + 3
+                        ) {
+                            // Get or create body pool for this shape
+                            let pool = this.bodyPool.get(bodyData.shape);
+                            if (!pool) {
+                                pool = [];
+                                this.bodyPool.set(bodyData.shape, pool);
+                            }
+
+                            // Set up transform
+                            const transform = new Ammo.btTransform();
+                            transform.setFromOpenGLMatrix(
+                                bodyData.matrix.elements
+                            );
+
+                            let rigidBody;
+                            if (pool.length > 0) {
+                                // Reuse existing body from pool
+                                rigidBody = pool.pop();
+                                rigidBody.setWorldTransform(transform);
+                                Ammo.destroy(transform);
+                                this.dynamicsWorld.addRigidBody(rigidBody);
+                            } else {
+                                // Create new body
+                                const motionState =
+                                    new Ammo.btDefaultMotionState(transform);
+                                Ammo.destroy(transform);
+
+                                const localInertia = new Ammo.btVector3();
+                                bodyData.shape.calculateLocalInertia(
+                                    0,
+                                    localInertia
+                                );
+
+                                const rigidBodyInfo =
+                                    new Ammo.btRigidBodyConstructionInfo(
+                                        0,
+                                        motionState,
+                                        bodyData.shape,
+                                        localInertia
+                                    );
+
+                                rigidBody = new Ammo.btRigidBody(rigidBodyInfo);
+                                rigidBody.setFriction(1);
+
+                                Ammo.destroy(localInertia);
+                                Ammo.destroy(rigidBodyInfo);
+                                this.dynamicsWorld.addRigidBody(rigidBody);
+                            }
+
+                            if (bodyData.body)
+                                throw new Error(
+                                    "Activating already active rigid body"
+                                );
+
+                            bodyData.body = rigidBody;
+                            bodyData.active = true;
+                            this.activeBodies.push(bodyData);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Steps the physics simulation forward by one fixed time step.
+     */
+    step() {
+        this.dynamicsWorld.stepSimulation(
+            1 / PhysicsEngine.stepsPerSecond, // deltaTime
+            0, // maxSubSteps (0 = no interpolation)
+            1 / PhysicsEngine.stepsPerSecond // fixedTimeStep
+        );
+    }
+
+    /**
+     * Returns the dynamics world of the physics engine.
+     * @returns {InstanceType<typeof Ammo.btDiscreteDynamicsWorld>} The dynamics world of the physics engine.
+     */
+    get world() {
+        return this.dynamicsWorld;
+    }
+
+    /**
+     * Returns the collision dispatcher of the physics engine.
+     * @returns {InstanceType<typeof Ammo.btCollisionDispatcher>} The collision dispatcher of the physics
+     */
+    get dispatcher() {
+        return this.collisionDispatcher;
     }
 }
 
