@@ -10,6 +10,16 @@ declare function noDeterministicImplementationError(operation: string): void;
  * @returns {Uint8Array|null} Returns a Uint8Array if the base64 string is valid, otherwise returns null.
  */
 declare function decodeBase64ToUint8Array(base64: string): Uint8Array | null;
+/**
+ * Returns the quaternion for a specific block rotation.
+ * @param {number} faceNormalIndex The index of the face normal (0-5).
+ * @param {number} rotationIndex The index of the rotation (0-3).
+ * @returns {InstanceType<typeof THREE.Quaternion>} Returns the quaternion for the specified face normal and rotation index.
+ */
+declare function getBlockRotation(
+    faceNormalIndex: number,
+    rotationIndex: number
+): InstanceType<typeof THREE.Quaternion>;
 declare const fastMathWasm: WebAssembly.Exports;
 declare const sineValues: number[];
 /**
@@ -410,3 +420,119 @@ declare const RaceStage: {
     Checkpoint: 0;
     Finish: 1;
 };
+/**
+ * Array of pre-calculated quaternions for block rotations.
+ * Each row represents a face normal to rotate around.
+ * Each quaternion represents a 90-degree-multiple rotation around the corresponding face normal.
+ * @type {InstanceType<typeof THREE.Quaternion>[][]}
+ */
+declare const blockRotationQuaternions: InstanceType<
+    typeof THREE.Quaternion
+>[][];
+/**
+ * Class to manage track parts (specifically checkpoints & finish lines) and their physics.
+ */
+declare class TrackManager {
+    /**
+     * The size of each part in the track.
+     * @type {number}
+     */
+    static partSize: number;
+    /**
+     *
+     * @param {number} x The x-coordinate of the part.
+     * @param {number} y The y-coordinate of the part.
+     * @param {number} z The z-coordinate of the part.
+     * @param {number} rotation The rotation index of the part.
+     * @param {number} rotationAxis The rotation axis index of the part.
+     * @param {number} type The type of the part.
+     * @param {number} physicsEngine The physics engine to use for the part.
+     * @param {number} trackData The track data containing information about the part's physics shape.
+     */
+    static addPhysicsPart(
+        x: number,
+        y: number,
+        z: number,
+        rotation: number,
+        rotationAxis: number,
+        type: number,
+        physicsEngine: number,
+        trackData: number
+    ): void;
+    /**
+     * Creates a new TrackManager instance.
+     * This constructor initializes the track manager with the provided physics engine, track data, and part provider.
+     * It processes the parts provided by the part provider, categorizing them by type and
+     * setting up the necessary physics for each part.
+     * @param {InstanceType<typeof PhysicsEngine>} physicsEngine - The physics engine to use for the track parts.
+     * @param {undefined} trackData - The track data containing information about the parts and their detectors.
+     * @param {undefined} partProvider - The part provider that supplies the parts for the track.
+     * @throws {Error} Throws an error if a part detector is missing or if a checkpoint has no checkpoint order.
+     * @constructor
+     */
+    constructor(
+        physicsEngine: InstanceType<typeof PhysicsEngine>,
+        trackData: undefined,
+        partProvider: undefined
+    );
+    trackData: any;
+    partsByType: Map<any, any>;
+    finishParts: any[];
+    checkpointParts: any[];
+    checkpointOrderList: any[];
+    /**
+     * Returns the total number of checkpoint indices.
+     * @returns {number} The total number of checkpoint indices.
+     */
+    getTotalNumberOfCheckpointIndices(): number;
+    /**
+     * Checks if the player is overlapping with a checkpoint.
+     * @param {InstanceType<typeof THREE.Box3>} playerBox - The bounding box of the player.
+     * @param {number} checkpointIndex - The index of the checkpoint to check against.
+     * @returns {{x: number, y: number, z: number, rotation: number, rotationAxis: number, type: string}|null} Returns the part information if the player overlaps with the checkpoint, otherwise null.
+     */
+    checkCheckpoint(
+        playerBox: InstanceType<typeof THREE.Box3>,
+        checkpointIndex: number
+    ): {
+        x: number;
+        y: number;
+        z: number;
+        rotation: number;
+        rotationAxis: number;
+        type: string;
+    } | null;
+    /**
+     *
+     * @param {InstanceType<typeof THREE.Box3>} playerBox - The bounding box of the player.
+     * @returns {{x: number, y: number, z: number, rotation: number, rotationAxis: number, type: string}|null} Returns the part information if the player overlaps with the finish line, otherwise null.
+     */
+    checkFinish(playerBox: InstanceType<typeof THREE.Box3>): {
+        x: number;
+        y: number;
+        z: number;
+        rotation: number;
+        rotationAxis: number;
+        type: string;
+    } | null;
+    /**
+     * Checks if the player is overlapping with a checkpoint or finish line.
+     * This method checks the player's bounding box against all parts in the specified checkpoint index.
+     * If the checkpoint index is null, it checks against the finish line parts.
+     * It returns the part information if an overlap is detected, otherwise returns null.
+     * @param {InstanceType<typeof THREE.Box3>} playerBox - The bounding box of the player.
+     * @param {number|null} checkpointIndex - The index of the checkpoint to check against, or null to check the finish line.
+     * @returns {{x: number, y: number, z: number, rotation: number, rotationAxis: number, type: string}|null} Returns the part information if an overlap is detected, otherwise null.
+     */
+    checkOverlap(
+        playerBox: InstanceType<typeof THREE.Box3>,
+        checkpointIndex: number | null
+    ): {
+        x: number;
+        y: number;
+        z: number;
+        rotation: number;
+        rotationAxis: number;
+        type: string;
+    } | null;
+}

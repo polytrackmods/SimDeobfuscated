@@ -417,7 +417,7 @@ class FrameRecorder {
 
         const inflate = new pako.Inflate();
         inflate.push(buffer, true);
-        if (inflate.err) return null;
+        if (inflate.err != null) return null;
 
         const decompressedBuffer = inflate.result;
         if (!(decompressedBuffer instanceof Uint8Array)) return null;
@@ -425,27 +425,27 @@ class FrameRecorder {
         // Decode each input packet from the decompressed buffer
         let offset = 0;
         const upFrames = FrameRecorder.decodePacket(decompressedBuffer);
-        if (!upFrames) return null;
+        if (upFrames == null) return null;
         offset += 3 + upFrames.length * 3;
         const rightFrames = FrameRecorder.decodePacket(
             decompressedBuffer.subarray(offset)
         );
-        if (!rightFrames) return null;
+        if (rightFrames == null) return null;
         offset += 3 + rightFrames.length * 3;
         const downFrames = FrameRecorder.decodePacket(
             decompressedBuffer.subarray(offset)
         );
-        if (!downFrames) return null;
+        if (downFrames == null) return null;
         offset += 3 + downFrames.length * 3;
         const leftFrames = FrameRecorder.decodePacket(
             decompressedBuffer.subarray(offset)
         );
-        if (!leftFrames) return null;
+        if (leftFrames == null) return null;
         offset += 3 + leftFrames.length * 3;
         const resetFrames = FrameRecorder.decodePacket(
             decompressedBuffer.subarray(offset)
         );
-        if (!resetFrames) return null;
+        if (resetFrames == null) return null;
 
         return new FrameRecorder({
             upFrames: upFrames,
@@ -740,8 +740,11 @@ class PhysicsEngine {
             }
 
             // Create BVH triangle mesh shape for efficient collision detection
-            // @ts-ignore
-            const meshShape = new Ammo.btBvhTriangleMeshShape(triangleMesh);
+            // TODO: figure out if second parameter should be true or false
+            const meshShape = new Ammo.btBvhTriangleMeshShape(
+                triangleMesh,
+                true
+            );
             meshShape.setMargin(0.02);
 
             // Set up transform with offset
@@ -850,7 +853,7 @@ class PhysicsEngine {
                             xMap.set(y, new Map([[z, [staticBodyData]]]));
                         } else {
                             const zArray = yMap.get(z);
-                            if (!zArray) {
+                            if (zArray == null) {
                                 yMap.set(z, [staticBodyData]);
                             } else {
                                 zArray.push(staticBodyData);
@@ -920,7 +923,7 @@ class PhysicsEngine {
             ) {
                 // Return body to pool for reuse
                 const pool = this.bodyPool.get(bodyData.shape);
-                if (!pool) {
+                if (pool == null) {
                     this.bodyPool.set(bodyData.shape, [bodyData.body]);
                 } else {
                     pool.push(bodyData.body);
@@ -961,7 +964,7 @@ class PhysicsEngine {
                         ) {
                             // Get or create body pool for this shape
                             let pool = this.bodyPool.get(bodyData.shape);
-                            if (!pool) {
+                            if (pool == null) {
                                 pool = [];
                                 this.bodyPool.set(bodyData.shape, pool);
                             }
@@ -1128,3 +1131,296 @@ const RaceStage = {
     Checkpoint: 0,
     Finish: 1,
 };
+
+// TODO: determine the face normals & rotations for each row/column
+/**
+ * Array of pre-calculated quaternions for block rotations.
+ * Each row represents a face normal to rotate around.
+ * Each quaternion represents a 90-degree-multiple rotation around the corresponding face normal.
+ * @type {InstanceType<typeof THREE.Quaternion>[][]}
+ */
+const blockRotationQuaternions = [
+    [
+        new THREE.Quaternion(0, 0, 0, 1),
+        new THREE.Quaternion(0, 0.7071067811865475, 0, 0.7071067811865476),
+        new THREE.Quaternion(0, 1, 0, 0),
+        new THREE.Quaternion(0, 0.7071067811865476, 0, -0.7071067811865475),
+    ],
+    [
+        new THREE.Quaternion(0, 0, 1, 0),
+        new THREE.Quaternion(0.7071067811865475, 0, 0.7071067811865476, 0),
+        new THREE.Quaternion(1, 0, 0, 0),
+        new THREE.Quaternion(0.7071067811865476, 0, -0.7071067811865475, 0),
+    ],
+    [
+        new THREE.Quaternion(0, 0, -0.7071067811865477, 0.7071067811865475),
+        new THREE.Quaternion(0.5, 0.5, -0.5, 0.5),
+        new THREE.Quaternion(0.7071067811865475, 0.7071067811865477, 0, 0),
+        new THREE.Quaternion(0.5, 0.5, 0.5, -0.5),
+    ],
+    [
+        new THREE.Quaternion(0, 0, 0.7071067811865475, 0.7071067811865476),
+        new THREE.Quaternion(0.5, -0.5, 0.5, 0.5),
+        new THREE.Quaternion(0.7071067811865476, -0.7071067811865475, 0, 0),
+        new THREE.Quaternion(0.5, -0.5, -0.5, -0.5),
+    ],
+    [
+        new THREE.Quaternion(0.7071067811865475, 0, 0, 0.7071067811865476),
+        new THREE.Quaternion(0.5, 0.5, 0.5, 0.5),
+        new THREE.Quaternion(0, 0.7071067811865476, 0.7071067811865475, 0),
+        new THREE.Quaternion(-0.5, 0.5, 0.5, -0.5),
+    ],
+    [
+        new THREE.Quaternion(-0.7071067811865477, 0, 0, 0.7071067811865475),
+        new THREE.Quaternion(-0.5, -0.5, 0.5, 0.5),
+        new THREE.Quaternion(0, -0.7071067811865475, 0.7071067811865477, 0),
+        new THREE.Quaternion(0.5, -0.5, 0.5, -0.5),
+    ],
+];
+
+/**
+ * Returns the quaternion for a specific block rotation.
+ * @param {number} faceNormalIndex The index of the face normal (0-5).
+ * @param {number} rotationIndex The index of the rotation (0-3).
+ * @returns {InstanceType<typeof THREE.Quaternion>} Returns the quaternion for the specified face normal and rotation index.
+ */
+function getBlockRotation(faceNormalIndex, rotationIndex) {
+    return blockRotationQuaternions[faceNormalIndex][rotationIndex];
+}
+
+// TODO: implement the other structures (partprovider, etc.) & add their types
+/**
+ * Class to manage track parts (specifically checkpoints & finish lines) and their physics.
+ */
+class TrackManager {
+    /**
+     * The size of each part in the track.
+     * @type {number}
+     */
+    static partSize = 5;
+
+    /**
+     * Creates a new TrackManager instance.
+     * This constructor initializes the track manager with the provided physics engine, track data, and part provider.
+     * It processes the parts provided by the part provider, categorizing them by type and
+     * setting up the necessary physics for each part.
+     * @param {InstanceType<typeof PhysicsEngine>} physicsEngine - The physics engine to use for the track parts.
+     * @param {undefined} trackData - The track data containing information about the parts and their detectors.
+     * @param {undefined} partProvider - The part provider that supplies the parts for the track.
+     * @throws {Error} Throws an error if a part detector is missing or if a checkpoint has no checkpoint order.
+     * @constructor
+     */
+    constructor(physicsEngine, trackData, partProvider) {
+        this.trackData = trackData;
+        this.partsByType = new Map();
+        this.finishParts = [];
+        this.checkpointParts = [];
+        this.checkpointOrderList = [];
+
+        partProvider.forEachPart(
+            (
+                x,
+                y,
+                z,
+                rotation,
+                rotationAxis,
+                type,
+                physics,
+                checkpointOrder
+            ) => {
+                TrackManager.addPhysicsPart(
+                    x,
+                    y,
+                    z,
+                    rotation,
+                    rotationAxis,
+                    type,
+                    physicsEngine,
+                    trackData
+                );
+
+                const parts = this.partsByType.get(type);
+                const partInfo = {
+                    x,
+                    y,
+                    z,
+                    rotation,
+                    rotationAxis,
+                    type,
+                    checkpointOrder,
+                };
+
+                if (parts == null) {
+                    this.partsByType.set(type, [partInfo]);
+                } else {
+                    parts.push(partInfo);
+                }
+            }
+        );
+
+        // Process finish parts
+        for (const type of trackData.getPartTypesWithDetector(
+            RaceStage.Finish
+        )) {
+            const detector = trackData.getDetector(type);
+            if (!detector) throw new Error("Part detector is missing");
+
+            const parts = this.partsByType.get(type);
+            if (parts) {
+                this.finishParts.push(
+                    ...parts.map((p) => ({ ...p, detector }))
+                );
+            }
+        }
+
+        // Process checkpoint parts
+        for (const type of trackData.getPartTypesWithDetector(
+            RaceStage.Checkpoint
+        )) {
+            const detector = trackData.getDetector(type);
+            if (!detector) throw new Error("Part detector is missing");
+
+            const parts = this.partsByType.get(type);
+            if (parts) {
+                this.checkpointParts.push(
+                    ...parts.map((p) => {
+                        if (!p.checkpointOrder) {
+                            throw new Error(
+                                "Checkpoint has no checkpoint order"
+                            );
+                        }
+                        return { ...p, detector };
+                    })
+                );
+            }
+        }
+
+        // Extract unique checkpoint orders
+        this.checkpointOrderList = [
+            ...new Set(this.checkpointParts.map((p) => p.checkpointOrder)),
+        ].sort((a, b) => a - b);
+    }
+
+    /**
+     * Returns the total number of checkpoint indices.
+     * @returns {number} The total number of checkpoint indices.
+     */
+    getTotalNumberOfCheckpointIndices() {
+        return this.checkpointOrderList.length;
+    }
+
+    /**
+     * Checks if the player is overlapping with a checkpoint.
+     * @param {InstanceType<typeof THREE.Box3>} playerBox - The bounding box of the player.
+     * @param {number} checkpointIndex - The index of the checkpoint to check against.
+     * @returns {{x: number, y: number, z: number, rotation: number, rotationAxis: number, type: string}|null} Returns the part information if the player overlaps with the checkpoint, otherwise null.
+     */
+    checkCheckpoint(playerBox, checkpointIndex) {
+        return this.checkOverlap(playerBox, checkpointIndex);
+    }
+
+    /**
+     *
+     * @param {InstanceType<typeof THREE.Box3>} playerBox - The bounding box of the player.
+     * @returns {{x: number, y: number, z: number, rotation: number, rotationAxis: number, type: string}|null} Returns the part information if the player overlaps with the finish line, otherwise null.
+     */
+    checkFinish(playerBox) {
+        return this.checkOverlap(playerBox, null);
+    }
+
+    /**
+     *
+     * @param {number} x The x-coordinate of the part.
+     * @param {number} y The y-coordinate of the part.
+     * @param {number} z The z-coordinate of the part.
+     * @param {number} rotation The rotation index of the part.
+     * @param {number} rotationAxis The rotation axis index of the part.
+     * @param {number} type The type of the part.
+     * @param {number} physicsEngine The physics engine to use for the part.
+     * @param {number} trackData The track data containing information about the part's physics shape.
+     */
+    static addPhysicsPart(
+        x,
+        y,
+        z,
+        rotation,
+        rotationAxis,
+        type,
+        physicsEngine,
+        trackData
+    ) {
+        const quaternion = getBlockRotation(rotationAxis, rotation);
+        const position = new THREE.Vector3(
+            x * TrackManager.partSize,
+            y * TrackManager.partSize,
+            z * TrackManager.partSize
+        );
+        const matrix = new THREE.Matrix4().compose(
+            position,
+            quaternion,
+            new THREE.Vector3(1, 1, 1)
+        );
+
+        const { boundingBox, shape } = trackData.getPhysicsShape(type);
+        physicsEngine.addStaticBody(matrix, boundingBox, shape);
+    }
+
+    /**
+     * Checks if the player is overlapping with a checkpoint or finish line.
+     * This method checks the player's bounding box against all parts in the specified checkpoint index.
+     * If the checkpoint index is null, it checks against the finish line parts.
+     * It returns the part information if an overlap is detected, otherwise returns null.
+     * @param {InstanceType<typeof THREE.Box3>} playerBox - The bounding box of the player.
+     * @param {number|null} checkpointIndex - The index of the checkpoint to check against, or null to check the finish line.
+     * @returns {{x: number, y: number, z: number, rotation: number, rotationAxis: number, type: string}|null} Returns the part information if an overlap is detected, otherwise null.
+     */
+    checkOverlap(playerBox, checkpointIndex) {
+        const parts =
+            checkpointIndex == null ? this.finishParts : this.checkpointParts;
+        const targetOrder =
+            checkpointIndex == null
+                ? null
+                : this.checkpointOrderList[checkpointIndex];
+
+        for (const part of parts) {
+            if (checkpointIndex != null && part.checkpointOrder !== targetOrder)
+                continue;
+
+            const quaternion = getBlockRotation(
+                part.rotationAxis,
+                part.rotation
+            );
+            const worldCenter = part.detector.center
+                .clone()
+                .applyQuaternion(quaternion)
+                .add(
+                    new THREE.Vector3(
+                        part.x * TrackManager.partSize,
+                        part.y * TrackManager.partSize,
+                        part.z * TrackManager.partSize
+                    )
+                );
+
+            const size = part.detector.size.clone().applyQuaternion(quaternion);
+            size.set(Math.abs(size.x), Math.abs(size.y), Math.abs(size.z));
+
+            const boundingBox = new THREE.Box3().setFromCenterAndSize(
+                worldCenter,
+                size
+            );
+
+            if (playerBox.intersectsBox(boundingBox)) {
+                return {
+                    x: part.x,
+                    y: part.y,
+                    z: part.z,
+                    rotation: part.rotation,
+                    rotationAxis: part.rotationAxis,
+                    type: part.type,
+                };
+            }
+        }
+
+        return null;
+    }
+}
