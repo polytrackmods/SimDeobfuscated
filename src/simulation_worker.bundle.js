@@ -1790,3 +1790,372 @@ class TrackData {
         };
     }
 }
+
+// Don't add a type to the jsdoc, ts automatically infers the type from the object
+/**
+ * Enum representing the different commands for the simulation API.
+ */
+const SimAPICommands = {
+    Init: 0,
+    Verify: 1,
+    TestDeterminism: 2,
+    CreateCar: 3,
+    DeleteCar: 4,
+    StartCar: 5,
+    ControlCar: 6,
+    PauseCar: 7,
+    VerifyResult: 8,
+    DeterminismResult: 9,
+    UpdateResult: 10,
+};
+
+/**
+ * Class to review replay frames.
+ */
+class ReplayReviewer {
+    /**
+     * Creates a new ReplayReviewer instance.
+     * @param {InstanceType<typeof FrameRecorder>} frameRecorder - The frame recorder to use for reviewing frames.
+     * @constructor
+     */
+    constructor(frameRecorder) {
+        this.frameRecorder = frameRecorder;
+    }
+
+    /**
+     * Retrieves the controls for a specific frame index.
+     * This method returns the controls recorded for the specified frame index.
+     * @param {number} frameIndex - The index of the frame to retrieve controls for
+     * @returns {{up: boolean, down: boolean, left: boolean, right: boolean, reset: boolean}} The controls for the specified frame index.
+     */
+    getControls(frameIndex) {
+        return this.frameRecorder.getFrame(frameIndex);
+    }
+}
+
+/**
+ * Base64 URL-safe character set (RFC 4648).
+ * @type {string[]}
+ */
+const BASE64_CHARS = [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l",
+    "m",
+    "n",
+    "o",
+    "p",
+    "q",
+    "r",
+    "s",
+    "t",
+    "u",
+    "v",
+    "w",
+    "x",
+    "y",
+    "z",
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+];
+
+/**
+ * Lookup table for character codes to Base64 indices.
+ * @type {number[]}
+ */
+const CHAR_TO_INDEX = [
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+    // Numbers 0-9
+    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, -1,
+    // Uppercase A-Z
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    21, 22, 23, 24, 25, -1, -1, -1, -1, -1, -1,
+    // Lowercase a-z
+    26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44,
+    45, 46, 47, 48, 49, 50, 51,
+];
+
+/**
+ * Encodes binary data to a Base64 URL-safe string
+ * @param {Uint8Array} data - Binary data to encode
+ * @returns {string} Base64 URL-safe encoded string
+ */
+function encodeBase64Url(data) {
+    let bitPosition = 0;
+    let result = "";
+
+    while (bitPosition < 8 * data.length) {
+        const value = extractBits(data, bitPosition);
+        let index;
+
+        // Use 6 bits if possible (standard Base64), otherwise use 5 bits
+        if ((value & 0x30) !== 0) {
+            // 0x30 = 00110000
+            index = value;
+            bitPosition += 6;
+        } else {
+            index = value & 0x1f; // 0x1F = 00011111
+            bitPosition += 5;
+        }
+
+        result += BASE64_CHARS[index];
+    }
+
+    return result;
+}
+
+/**
+ * Decodes a Base64 URL-safe string to binary data
+ * @param {string} str - Base64 URL-safe encoded string
+ * @returns {Uint8Array|null} Decoded binary data or null if invalid input
+ */
+function decodeBase64Url(str) {
+    let bitPosition = 0;
+    const bytes = [];
+    const length = str.length;
+
+    for (let i = 0; i < length; i++) {
+        const charCode = str.charCodeAt(i);
+
+        // Check for invalid characters
+        if (charCode >= CHAR_TO_INDEX.length) return null;
+        const index = CHAR_TO_INDEX[charCode];
+        if (index === -1) return null;
+
+        // Write bits to output
+        if ((index & 0x30) !== 0) {
+            writeBits(bytes, bitPosition, 6, index, i === length - 1);
+            bitPosition += 6;
+        } else {
+            writeBits(bytes, bitPosition, 5, index, i === length - 1);
+            bitPosition += 5;
+        }
+    }
+
+    return new Uint8Array(bytes);
+}
+
+/**
+ * Extracts bits from a Uint8Array at a specific bit position
+ * @param {Uint8Array} data - The input byte array
+ * @param {number} bitPosition - The bit position to read from (0-based)
+ * @throws {Error} If bitPosition is out of range
+ * @returns {number} The extracted 6-bit value
+ */
+function extractBits(data, bitPosition) {
+    if (bitPosition >= 8 * data.length) {
+        throw new Error("Out of range");
+    }
+
+    const byteIndex = Math.floor(bitPosition / 8);
+    const byteValue = data[byteIndex];
+    const bitOffset = bitPosition % 8;
+
+    // For simple cases where we don't need to cross byte boundaries
+    if (bitOffset <= 2 || byteIndex >= data.length - 1) {
+        return (byteValue & (0x3f << bitOffset)) >>> bitOffset;
+    }
+
+    // For cases where we need to read across byte boundaries
+    const currentByteBits = (byteValue & (0x3f << bitOffset)) >>> bitOffset;
+    const nextByteBits =
+        (data[byteIndex + 1] & (0x3f >>> (8 - bitOffset))) << (8 - bitOffset);
+
+    return currentByteBits | nextByteBits;
+}
+
+/**
+ * Writes bits into a byte array at a specific bit position
+ * @param {number[]} bytes - The output byte array (will be modified)
+ * @param {number} bitPosition - The bit position to write to (0-based)
+ * @param {number} bitCount - Number of bits to write (5 or 6)
+ * @param {number} value - The value to write (only the lowest bitCount bits will be used)
+ * @param {boolean} isLast - Whether this is the last write operation
+ */
+function writeBits(bytes, bitPosition, bitCount, value, isLast) {
+    const byteIndex = Math.floor(bitPosition / 8);
+
+    // Ensure the byte array is large enough
+    while (byteIndex >= bytes.length) {
+        bytes.push(0);
+    }
+
+    const bitOffset = bitPosition % 8;
+
+    // Write the first part of the value to the current byte
+    bytes[byteIndex] |= (value << bitOffset) & 0xff;
+
+    // Handle overflow into the next byte if needed
+    if (bitOffset > 8 - bitCount && !isLast) {
+        const nextByteIndex = byteIndex + 1;
+        if (nextByteIndex >= bytes.length) {
+            bytes.push(0);
+        }
+        bytes[nextByteIndex] |= value >>> (8 - bitOffset);
+    }
+}
+
+/**
+ * Class representing an angle in a range of 0 to 179 degrees.
+ */
+class Angle {
+    /**
+     * Creates a new Angle instance
+     * @param {number} representation - Angle representation (0-179, default 28)
+     * @throws {Error} If representation is not a safe integer or out of range
+     * @constructor
+     */
+    constructor(representation = 28) {
+        if (
+            !Number.isSafeInteger(representation) ||
+            representation < 0 ||
+            representation >= 180
+        ) {
+            throw new Error(
+                "Representation is not a safe integer or is out of range"
+            );
+        }
+
+        this.angle = representation;
+    }
+
+    /**
+     * Creates a copy of this Angle
+     * @returns {Angle} A new Angle with the same value
+     */
+    clone() {
+        return new Angle(this.angle);
+    }
+
+    /**
+     * Converts the internal representation to degrees
+     * @returns {number} Angle in degrees (0-358)
+     */
+    toDegrees() {
+        return this.angle * 2;
+    }
+
+    /**
+     * Creates an Angle from degrees
+     * @param {number} degrees - Angle in degrees
+     * @returns {Angle} New Angle instance
+     */
+    static fromDegrees(degrees) {
+        const representation = Math.round((degrees / 2) % 180);
+
+        return new Angle(representation);
+    }
+
+    /**
+     * Calculates a sun position vector based on this angle
+     * @returns {InstanceType<typeof THREE.Vector3>} Normalized 3D vector representing sun position
+     */
+    getSunPosition() {
+        const degrees = this.toDegrees();
+        const radians = degrees * (Math.PI / 180);
+        const x = Math.cos(radians);
+        const z = Math.sin(radians);
+        return new THREE.Vector3(x, 0.78, z).normalize();
+    }
+
+    /**
+     * Gets the internal angle representation
+     * @returns {number} The internal representation (0-179)
+     */
+    get representation() {
+        return this.angle;
+    }
+}
+
+/**
+ * Enum representing different environments in the simulation.
+ * @type {{Summer: 0, Winter: 1, Desert: 2}}
+ */
+const Environments = {
+    Summer: 0,
+    Winter: 1,
+    Desert: 2,
+};
+
+// Don't add a type to the jsdoc, ts automatically infers the type from the object
+/**
+ * Enum representing extended environments in the simulation.
+ */
+const ExtendedEnvironments = {
+    Default: 0,
+    Summer: 1,
+    Winter: 2,
+    Desert: 3,
+    Custom0: 32,
+    Custom1: 33,
+    Custom2: 34,
+    Custom3: 35,
+    Custom4: 36,
+    Custom5: 37,
+    Custom6: 38,
+    Custom7: 39,
+    Custom8: 40,
+};
+
+// Don't add a type to the jsdoc, ts automatically infers the type from the object
+/**
+ * Enum representing different categories of track parts.
+ */
+const PartsCategories = {
+    Special: 0,
+    Road: 1,
+    RoadTurns: 2,
+    RoadWide: 3,
+    Plane: 4,
+    Block: 5,
+    WallTrack: 6,
+    Pillar: 7,
+    Sign: 8,
+};
+
+// 2304

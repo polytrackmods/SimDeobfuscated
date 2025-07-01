@@ -20,6 +20,41 @@ declare function getBlockRotation(
     faceNormalIndex: number,
     rotationIndex: number
 ): InstanceType<typeof THREE.Quaternion>;
+/**
+ * Encodes binary data to a Base64 URL-safe string
+ * @param {Uint8Array} data - Binary data to encode
+ * @returns {string} Base64 URL-safe encoded string
+ */
+declare function encodeBase64Url(data: Uint8Array): string;
+/**
+ * Decodes a Base64 URL-safe string to binary data
+ * @param {string} str - Base64 URL-safe encoded string
+ * @returns {Uint8Array|null} Decoded binary data or null if invalid input
+ */
+declare function decodeBase64Url(str: string): Uint8Array | null;
+/**
+ * Extracts bits from a Uint8Array at a specific bit position
+ * @param {Uint8Array} data - The input byte array
+ * @param {number} bitPosition - The bit position to read from (0-based)
+ * @throws {Error} If bitPosition is out of range
+ * @returns {number} The extracted 6-bit value
+ */
+declare function extractBits(data: Uint8Array, bitPosition: number): number;
+/**
+ * Writes bits into a byte array at a specific bit position
+ * @param {number[]} bytes - The output byte array (will be modified)
+ * @param {number} bitPosition - The bit position to write to (0-based)
+ * @param {number} bitCount - Number of bits to write (5 or 6)
+ * @param {number} value - The value to write (only the lowest bitCount bits will be used)
+ * @param {boolean} isLast - Whether this is the last write operation
+ */
+declare function writeBits(
+    bytes: number[],
+    bitPosition: number,
+    bitCount: number,
+    value: number,
+    isLast: boolean
+): void;
 declare const fastMathWasm: WebAssembly.Exports;
 declare const sineValues: number[];
 /**
@@ -792,4 +827,128 @@ declare class TrackData {
      * @returns {Object} The detector object containing type, center, and size.
      */
     getDetector(id: number): any;
+}
+declare namespace SimAPICommands {
+    let Init: number;
+    let Verify: number;
+    let TestDeterminism: number;
+    let CreateCar: number;
+    let DeleteCar: number;
+    let StartCar: number;
+    let ControlCar: number;
+    let PauseCar: number;
+    let VerifyResult: number;
+    let DeterminismResult: number;
+    let UpdateResult: number;
+}
+/**
+ * Class to review replay frames.
+ */
+declare class ReplayReviewer {
+    /**
+     * Creates a new ReplayReviewer instance.
+     * @param {InstanceType<typeof FrameRecorder>} frameRecorder - The frame recorder to use for reviewing frames.
+     * @constructor
+     */
+    constructor(frameRecorder: InstanceType<typeof FrameRecorder>);
+    frameRecorder: FrameRecorder;
+    /**
+     * Retrieves the controls for a specific frame index.
+     * This method returns the controls recorded for the specified frame index.
+     * @param {number} frameIndex - The index of the frame to retrieve controls for
+     * @returns {{up: boolean, down: boolean, left: boolean, right: boolean, reset: boolean}} The controls for the specified frame index.
+     */
+    getControls(frameIndex: number): {
+        up: boolean;
+        down: boolean;
+        left: boolean;
+        right: boolean;
+        reset: boolean;
+    };
+}
+/**
+ * Base64 URL-safe character set (RFC 4648).
+ * @type {string[]}
+ */
+declare const BASE64_CHARS: string[];
+/**
+ * Lookup table for character codes to Base64 indices.
+ * @type {number[]}
+ */
+declare const CHAR_TO_INDEX: number[];
+/**
+ * Class representing an angle in a range of 0 to 179 degrees.
+ */
+declare class Angle {
+    /**
+     * Creates an Angle from degrees
+     * @param {number} degrees - Angle in degrees
+     * @returns {Angle} New Angle instance
+     */
+    static fromDegrees(degrees: number): Angle;
+    /**
+     * Creates a new Angle instance
+     * @param {number} representation - Angle representation (0-179, default 28)
+     * @throws {Error} If representation is not a safe integer or out of range
+     * @constructor
+     */
+    constructor(representation?: number);
+    angle: number;
+    /**
+     * Creates a copy of this Angle
+     * @returns {Angle} A new Angle with the same value
+     */
+    clone(): Angle;
+    /**
+     * Converts the internal representation to degrees
+     * @returns {number} Angle in degrees (0-358)
+     */
+    toDegrees(): number;
+    /**
+     * Calculates a sun position vector based on this angle
+     * @returns {InstanceType<typeof THREE.Vector3>} Normalized 3D vector representing sun position
+     */
+    getSunPosition(): InstanceType<typeof THREE.Vector3>;
+    /**
+     * Gets the internal angle representation
+     * @returns {number} The internal representation (0-179)
+     */
+    get representation(): number;
+}
+/**
+ * Enum representing different environments in the simulation.
+ * @type {{Summer: 0, Winter: 1, Desert: 2}}
+ */
+declare const Environments: {
+    Summer: 0;
+    Winter: 1;
+    Desert: 2;
+};
+declare namespace ExtendedEnvironments {
+    let Default: number;
+    let Summer: number;
+    let Winter: number;
+    let Desert: number;
+    let Custom0: number;
+    let Custom1: number;
+    let Custom2: number;
+    let Custom3: number;
+    let Custom4: number;
+    let Custom5: number;
+    let Custom6: number;
+    let Custom7: number;
+    let Custom8: number;
+}
+declare namespace PartsCategories {
+    export let Special: number;
+    export let Road: number;
+    export let RoadTurns: number;
+    export let RoadWide: number;
+    let Plane_1: number;
+    export { Plane_1 as Plane };
+    let Block_1: number;
+    export { Block_1 as Block };
+    export let WallTrack: number;
+    export let Pillar: number;
+    export let Sign: number;
 }
